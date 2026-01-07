@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	curState, commands, err := startup()
 	if err != nil {
 		fmt.Println(err)
@@ -69,6 +68,7 @@ func startup() (cli.State, cli.Commands, error) {
 	commands.Register("register", cli.HandlerRegister)
 	commands.Register("reset", cli.HandlerReset)
 	commands.Register("users", cli.HandlerUsers)
+	commands.Register("agg", cli.HandlerAgg)
 
 	return curState, commands, nil
 

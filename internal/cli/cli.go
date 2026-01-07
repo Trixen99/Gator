@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gator/internal/config"
 	"gator/internal/database"
+	"gator/internal/rss"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,6 +101,19 @@ func HandlerUsers(s *State, cmd Command) error {
 		fmt.Print("\n")
 
 	}
+	return nil
+}
+
+func HandlerAgg(s *State, cmd Command) error {
+	data, err := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return err
+	}
+
+	fmt.Println(data)
+	data.UnescapeStrings()
+
 	return nil
 }
 
