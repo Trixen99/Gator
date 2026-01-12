@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"gator/internal/config"
 	"gator/internal/database"
@@ -105,15 +106,23 @@ func HandlerUsers(s *State, cmd Command) error {
 }
 
 func HandlerAgg(s *State, cmd Command) error {
-	data, err := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return err
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <duration>\n duration format = '1s', '1m', '1h'", cmd.Name)
 	}
+	duration, err := time.ParseDuration(cmd.Args[0])
+	if err != nil {
+		return fmt.Errorf("incorrect duration format. duration format should be '1s', '1m', '1h'")
+	}
+	fmt.Printf("Collecting feeds every %v\n", duration)
 
-	fmt.Println(data)
-	data.UnescapeStrings()
+	ticker := time.NewTicker(duration)
 
+	for ; ; <-ticker.C {
+		err := scrapeFeeds(s)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
 	return nil
 }
 
@@ -162,19 +171,20 @@ func HandlerFeeds(s *State, cmd Command) error {
 	if err != nil {
 		return fmt.Errorf("error getting data from database. Error: %v", err)
 	}
+	fmt.Println(len(feeds), "feeds in total")
 	for _, feed := range feeds {
 		user, err := s.Db.GetUserFromID(context.Background(), feed.UserID)
 
 		if err != nil {
 			return fmt.Errorf("error getting data from database. Error: %v", err)
 		}
-		fmt.Println(len(feeds), "feeds in total")
 		fmt.Println("Feed Name:")
 		fmt.Println(feed.Name)
 		fmt.Println("URL:")
 		fmt.Println(feed.Url)
 		fmt.Println("Created By:")
 		fmt.Println(user.Name)
+		fmt.Println(feed.LastFetchedAt)
 	}
 	return nil
 }
@@ -294,4 +304,35 @@ func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) 
 
 		return handler(s, cmd, user)
 	}
+}
+
+func scrapeFeeds(s *State) error {
+	feed, err := s.Db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return err
+	}
+	err = s.Db.MarkFeedFetched(context.Background(), database.MarkFeedFetchedParams{
+		ID: feed.ID,
+		LastFetchedAt: sql.NullTime{
+			Time:  time.Now().UTC(),
+			Valid: true,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	feedrss, err := rss.FetchFeed(context.Background(), feed.Url)
+	if err != nil {
+		return err
+	}
+	feedrss.UnescapeStrings()
+	fmt.Println(feedrss.RSSChannel.Title)
+	for _, item := range feedrss.RSSChannel.Item {
+		fmt.Println(item.Title)
+	}
+	fmt.Printf("\n")
+
+	return nil
 }

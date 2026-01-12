@@ -21,5 +21,13 @@ select * from feeds;
 select * from feeds where feeds.url = $1;
 
 
--- name: GetFeedByID :one
-select * from feeds where feeds.id = $1;
+-- name: MarkFeedFetched :exec
+update feeds
+set last_fetched_at = $2, updated_at = $2
+where feeds.id = $1;
+
+
+-- name: GetNextFeedToFetch :one
+select * from feeds
+order by last_fetched_at asc nulls first
+limit 1;
