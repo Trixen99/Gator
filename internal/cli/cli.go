@@ -128,11 +128,6 @@ func HandlerAgg(s *State, cmd Command) error {
 }
 
 func HandlerAddFeed(s *State, cmd Command, usr database.User) error {
-	user, err := s.Db.GetUser(context.Background(), s.Cfg.Current_user_name)
-	if err != nil {
-		return fmt.Errorf("error getting data from database. Error: %v", err)
-	}
-
 	if len(cmd.Args) != 2 {
 		return fmt.Errorf("usage: %s <name> <url>", cmd.Name)
 	}
@@ -141,9 +136,9 @@ func HandlerAddFeed(s *State, cmd Command, usr database.User) error {
 	name := cmd.Args[0]
 	created_at := time.Now().UTC()
 	url := cmd.Args[1]
-	user_id := user.ID
+	user_id := usr.ID
 
-	_, err = s.Db.CreateFeed(context.Background(), database.CreateFeedParams{
+	_, err := s.Db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID:        id,
 		Name:      name,
 		CreatedAt: created_at,
