@@ -7,6 +7,7 @@ import (
 	"gator/internal/config"
 	"gator/internal/database"
 	"gator/internal/rss"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -253,6 +254,42 @@ func HandlerUnfollow(s *State, cmd Command, user database.User) error {
 	return nil
 }
 
+func HandlerBrowse(s *State, cmd Command, user database.User) error {
+	limit := 2
+	if len(cmd.Args) > 1 {
+		return fmt.Errorf("usage: %s <limit|optional>", cmd.Name)
+	} else if len(cmd.Args) == 1 {
+		tmpLimit, err := strconv.Atoi(cmd.Args[0])
+		if err != nil {
+			return fmt.Errorf("error with command '%v'\n usage of command: %s <limit|optional>", err, cmd.Name)
+		}
+		limit = tmpLimit
+	}
+
+	posts, err := s.Db.GetPosts(context.Background(), database.GetPostsParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, post := range posts {
+		fmt.Printf("Title:\n%v\n", post.Title)
+		if post.PublishedAt.Valid == true {
+			fmt.Printf("Published at:\n%v\n", post.PublishedAt.Time.Format(time.RFC1123))
+		} else {
+			fmt.Printf("Published at:\nUnknown\n")
+		}
+		fmt.Printf("URL:\n%v\n\n", post.Url)
+
+		fmt.Printf("Content:\n%v\n", post.Description)
+
+	}
+
+	return nil
+}
+
 func (c *Commands) Run(s *State, cmd Command) error {
 	_, ok := c.Cmds[cmd.Name]
 	if !ok {
@@ -328,11 +365,36 @@ func scrapeFeeds(s *State) error {
 		return err
 	}
 	feedrss.UnescapeStrings()
-	fmt.Println(feedrss.RSSChannel.Title)
 	for _, item := range feedrss.RSSChannel.Item {
-		fmt.Println(item.Title)
+
+		id := uuid.New()
+		currentTime := time.Now().UTC()
+		valid := true
+		publishedTime, err := time.Parse(time.RFC1123Z, item.PubDate)
+		if err != nil {
+			fmt.Println("could not parse pubDate", item.PubDate, "error", err)
+			valid = false
+		}
+
+		_, err = s.Db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:          id,
+			CreatedAt:   currentTime,
+			UpdatedAt:   currentTime,
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: item.Description,
+			PublishedAt: sql.NullTime{
+				Time:  publishedTime,
+				Valid: valid,
+			},
+			FeedID: feed.ID,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("The following post successfully added\n%v\n", item.Title)
+
 	}
-	fmt.Printf("\n")
 
 	return nil
 }

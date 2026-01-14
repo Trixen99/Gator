@@ -15,8 +15,11 @@ RETURNING *;
 
 
 
--- name: GetPosts :one
+-- name: GetPosts :many
 select * from posts
-where feed_id = $1
+where feed_id in (
+    select feed_id from feed_follows
+    where user_id = $1
+    )
 order by published_at asc
 limit $2;
